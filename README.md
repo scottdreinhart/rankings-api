@@ -306,6 +306,56 @@ http://localhost:3000/docs
 | `GET` | `/notifications/:playerId/preferences` | Get notification preferences (challenge alerts, rank changes, etc.) |
 | `PATCH` | `/notifications/:playerId/preferences` | Update notification preferences |
 
+### Client UI Pairings
+
+Endpoints that pair directly with a visible UI element in game clients or admin panels:
+
+| UI Element | Icon / Control | Endpoint | Surface |
+|---|---|---|---|
+| Player avatar | Circular avatar image + display name | `GET /players/:id` | Game client — profile card / match screen |
+| Avatar upload button | 📷 camera icon overlay on avatar | `PATCH /players/:id` | Game client — profile edit |
+| Stats dashboard | Win/loss/draw counters + pie chart | `GET /players/:id/stats` | Game client — player profile |
+| Match history list | Scrollable list with W/L/D badges per row | `GET /players/:id/history` | Game client — profile detail |
+| Leaderboard table | Ranked list with 🥇🥈🥉 position medals | `GET /leaderboards/:gameId` | Game client — leaderboard screen |
+| "Your Rank" card | Rank badge with up/down arrow vs. previous | `GET /leaderboards/:gameId/around/:playerId` | Game client — leaderboard (auto-scrolls to player) |
+| Top players podium | Podium graphic with top 3 avatars | `GET /leaderboards/:gameId/top` | Game client — leaderboard header |
+| Friends tab toggle | 👥 "Friends" / 🌐 "Global" tab switch | `GET /friends/leaderboard/:gameId` | Game client — leaderboard tab bar |
+| Elo rating badge | Numeric rating + rank tier icon (Bronze, Silver, Gold, etc.) | `GET /ratings/:playerId` | Game client — player card / match result |
+| Rating history chart | 📈 line chart (Elo over time) | `GET /ratings/:playerId/history` | Game client — player profile detail |
+| Rating distribution curve | Bell curve visualization | `GET /ratings/distribution` | Game client — leaderboard stats tab |
+| Achievement badge grid | 🏆 trophy/badge icons in a grid (earned = color, unearned = gray) | `GET /achievements/:playerId` | Game client — achievements screen |
+| Achievement unlock toast | 🏆 popup notification with badge icon + name | `POST /achievements` (triggers client event) | Game client — overlay after match |
+| Win streak flame | 🔥 flame icon with streak count number | `GET /streaks/:playerId` | Game client — player card / match result |
+| Crown icon (King of the Hill) | 👑 crown icon on top-ranked player | `GET /king-of-the-hill/:gameId` | Game client — leaderboard #1 row |
+| "Challenge the King" button | ⚔ crossed swords + 👑 crown icon | `POST /king-of-the-hill/:gameId/challenge` | Game client — King profile card |
+| King reign timer | ⏱ duration counter ("King for 3d 5h") | `GET /king-of-the-hill/:gameId` | Game client — leaderboard #1 row |
+| King history timeline | 👑 timeline of past Kings with avatars | `GET /king-of-the-hill/:gameId/history` | Game client — King of the Hill detail |
+| Season banner | 🏅 decorated banner with season name + dates | `GET /seasons/current` | Game client — leaderboard header |
+| Season countdown | ⏳ countdown timer to season end | `GET /seasons/current` | Game client — leaderboard header |
+| "Add Friend" button | 👤➕ person-plus icon | `POST /friends/request` | Game client — player profile / post-match |
+| Accept friend button | ✅ checkmark icon on request row | `POST /friends/requests/:id/accept` | Game client — friend requests list |
+| Reject friend button | ❌ X icon on request row | `POST /friends/requests/:id/reject` | Game client — friend requests list |
+| Remove friend button | 👤➖ person-minus icon | `DELETE /friends/:playerId` | Game client — friend list row |
+| Friend request badge | 🔴 numeric badge on friends icon | `GET /friends/requests` | Game client — navigation bar |
+| "Challenge" button | ⚔ crossed swords icon | `POST /challenges` | Game client — friend list row / player profile |
+| Accept challenge button | ✅ "Accept" button on challenge card | `POST /challenges/:id/accept` | Game client — challenge notification |
+| Decline challenge button | ❌ "Decline" button on challenge card | `POST /challenges/:id/decline` | Game client — challenge notification |
+| Cancel challenge button | ✕ close icon on outgoing challenge | `DELETE /challenges/:id` | Game client — sent challenges list |
+| "Join Tournament" button | 🏟 tournament icon + "Join" CTA | `POST /tournaments/:id/register` | Game client — tournament detail |
+| "Leave Tournament" button | 🚪 exit icon | `DELETE /tournaments/:id/register/:playerId` | Game client — registered tournament |
+| Tournament bracket view | Bracket tree visualization | `GET /tournaments/:id/bracket` | Game client — tournament detail |
+| Tournament status badge | 🟢 Open / 🟡 In Progress / 🔴 Complete pill | `GET /tournaments/:id` | Game client — tournament card |
+| Replay play button | ▶ play icon on match history row | `GET /replays/:matchId` | Game client — match detail |
+| Featured replay badge | ⭐ star badge on replay row | `GET /replays/featured` | Game client — replays section |
+| "Report Player" button | 🚩 flag icon on player profile | `POST /reports` | Game client — player profile context menu |
+| Match dispute button | ⚠ warning triangle on match row | `POST /matches/:id/verify` | Game client — match detail |
+| Resolve report button | ⚖ gavel icon + action dropdown | `POST /reports/:id/resolve` | Admin panel — report queue |
+| Ban player button | 🔨 ban hammer icon | `POST /bans` | Admin panel — player moderation |
+| Unban button | 🔓 unlock icon | `DELETE /bans/:playerId` | Admin panel — banned players list |
+| Notification bell | 🔔 bell icon with unread count badge | `GET /notifications/:playerId` | Game client — navigation bar |
+| "Mark All Read" button | ✅ checkmark icon in notification dropdown | `POST /notifications/mark-read` | Game client — notification panel header |
+| Notification preference toggles | Toggle switches per category | `PATCH /notifications/:playerId/preferences` | Game client — settings screen |
+
 ## Architecture
 
 This project enforces seven complementary design principles:
