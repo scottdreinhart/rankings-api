@@ -24,7 +24,7 @@ See [LICENSE](LICENSE) file for complete terms and conditions.
 > [!CAUTION]
 > **LICENSE TRANSITION PLANNED** — This project is currently proprietary. The license will change to open source once the project has reached a suitable state to allow for it.
 
-[Project Structure](#project-structure) · [Getting Started](#getting-started) · [Tech Stack](#tech-stack) · [API Reference](#api-reference) · [Architecture](#architecture) · [Contributing](#contributing) · [Portfolio Services](#portfolio-services) · [Portfolio Games](#portfolio-games)
+[Project Structure](#project-structure) · [Getting Started](#getting-started) · [Tech Stack](#tech-stack) · [API Reference](#api-reference) · [Architecture](#architecture) · [Environment Variables](#environment-variables) · [Authentication](#authentication) · [Error Handling](#error-handling) · [Rate Limiting](#rate-limiting) · [Data Models](#data-models) · [Deployment](#deployment) · [Supported Clients](#supported-clients) · [Versioning](#versioning) · [Remaining Work](#remaining-work) · [Future Improvements](#future-improvements) · [Contributing](#contributing) · [Portfolio Services](#portfolio-services) · [Portfolio Games](#portfolio-games)
 
 ## Project Structure
 
@@ -396,6 +396,343 @@ This project enforces seven complementary design principles:
    - All inputs validated with Zod schemas in the domain layer
    - Fastify route schemas auto-generate OpenAPI docs via `@fastify/swagger`
    - **Benefit**: Single source of truth for validation, serialization, and documentation
+
+## Environment Variables
+
+Copy `.env.example` to `.env` and configure:
+
+| Variable | Description | Type | Default | Required |
+| -------- | ----------- | ---- | ------- | -------- |
+| `PORT` | HTTP server port | `number` | `3000` | No |
+| `HOST` | Bind address | `string` | `0.0.0.0` | No |
+| `NODE_ENV` | Runtime environment (`development`, `staging`, `production`) | `string` | `development` | No |
+| `LOG_LEVEL` | Pino log level (`fatal`, `error`, `warn`, `info`, `debug`, `trace`) | `string` | `info` | No |
+| `DATABASE_URL` | PostgreSQL connection string | `string` | — | **Yes** (production) |
+| `REDIS_URL` | Redis connection string for leaderboard caching and pub/sub | `string` | — | **Yes** (production) |
+| `API_KEY` | Service-to-service API key for internal callers | `string` | — | **Yes** (production) |
+| `JWT_SECRET` | Secret used to sign and verify JWT access tokens | `string` | — | **Yes** (production) |
+| `BILLING_API_URL` | Internal Billing API base URL for entitlement checks | `string` | `http://localhost:3001` | No |
+| `BILLING_API_KEY` | API key for authenticating with the Billing API | `string` | — | **Yes** (production) |
+| `WS_ENABLED` | Enable WebSocket server for live leaderboard updates | `boolean` | `false` | No |
+| `WS_PORT` | WebSocket server port (if separate from HTTP) | `number` | `3001` | No |
+| `ELO_DEFAULT_K` | Default Elo K-factor for new players | `number` | `32` | No |
+| `ELO_ESTABLISHED_K` | Elo K-factor for established players (30+ games) | `number` | `16` | No |
+| `SEASON_AUTO_ROTATE` | Whether to automatically rotate seasons on schedule | `boolean` | `true` | No |
+| `REPLAY_STORAGE_BUCKET` | S3-compatible bucket for game replay storage | `string` | — | No |
+| `REPLAY_STORAGE_REGION` | Cloud storage region for replays | `string` | `us-east-1` | No |
+| `CORS_ORIGIN` | Allowed CORS origin(s), comma-separated | `string` | `*` | No |
+| `RATE_LIMIT_MAX` | Max requests per rate-limit window | `number` | `100` | No |
+| `RATE_LIMIT_WINDOW_MS` | Rate-limit window duration in milliseconds | `number` | `60000` | No |
+
+## Authentication
+
+All non-public endpoints require authentication. The API supports two authentication methods:
+
+### JWT Bearer Tokens (Game Clients & Admin Apps)
+
+Game clients and admin apps authenticate by sending a JWT in the `Authorization` header:
+
+```
+Authorization: Bearer <token>
+```
+
+- Tokens are issued by the auth service upon successful login
+- Tokens contain the user's `sub` (user ID) and `roles` array
+- Tokens expire after a configurable TTL (default: 1 hour)
+- Refresh tokens are used to obtain new access tokens without re-authentication
+
+### API Keys (Service-to-Service)
+
+Internal services authenticate with a static API key in the `X-API-Key` header:
+
+```
+X-API-Key: <key>
+```
+
+- Used by admin apps and other portfolio APIs for server-to-server calls
+- Keys are configured via the `API_KEY` environment variable
+- API key requests bypass user-scoped authorization checks
+
+### Public Endpoints
+
+The following endpoints do not require authentication:
+
+| Endpoint | Purpose |
+| -------- | ------- |
+| `GET /health` | Health check |
+| `GET /ready` | Readiness probe |
+| `GET /docs` | Swagger UI |
+| `GET /docs/json` | OpenAPI spec |
+| `GET /leaderboards/:gameId` | Public leaderboard viewing |
+
+## Error Handling
+
+All error responses follow a consistent JSON structure:
+
+```json
+{
+  "statusCode": 409,
+  "error": "Conflict",
+  "message": "Player 'alex42' is already enrolled in tournament 'summer-showdown'",
+  "code": "TOURNAMENT_ALREADY_ENROLLED"
+}
+```
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `statusCode` | `number` | HTTP status code |
+| `error` | `string` | HTTP status text |
+| `message` | `string` | Human-readable error description |
+| `code` | `string?` | Machine-readable domain error code (optional) |
+
+### HTTP Status Codes
+
+| Status | Meaning | Example |
+| ------ | ------- | ------- |
+| `400` | Bad Request | Malformed JSON body or invalid match result |
+| `401` | Unauthorized | Missing or expired JWT / invalid API key |
+| `403` | Forbidden | Valid auth but insufficient role (e.g., non-admin banning players) |
+| `404` | Not Found | Player, match, season, or tournament not found |
+| `409` | Conflict | Already enrolled in tournament, duplicate friend request |
+| `422` | Unprocessable Entity | Business rule violation (e.g., match against self, invalid Elo) |
+| `429` | Too Many Requests | Rate limit exceeded |
+| `500` | Internal Server Error | Unexpected failure |
+
+### Domain Error Codes
+
+| Code | Description |
+| ---- | ----------- |
+| `PLAYER_NOT_FOUND` | No player profile exists with the given ID |
+| `PLAYER_BANNED` | Player account is banned and cannot participate |
+| `MATCH_NOT_FOUND` | No match exists with the given ID |
+| `MATCH_ALREADY_RESOLVED` | Match result has already been submitted |
+| `MATCH_SELF_PLAY` | Cannot submit a match where both players are the same |
+| `SEASON_NOT_FOUND` | No season exists with the given ID |
+| `SEASON_ENDED` | Season has ended; no new matches accepted |
+| `SEASON_NOT_STARTED` | Season has not begun yet |
+| `TOURNAMENT_NOT_FOUND` | No tournament exists with the given ID |
+| `TOURNAMENT_ALREADY_ENROLLED` | Player is already enrolled in this tournament |
+| `TOURNAMENT_FULL` | Tournament has reached its maximum participant count |
+| `TOURNAMENT_REGISTRATION_CLOSED` | Registration period has ended |
+| `CHALLENGE_NOT_FOUND` | No challenge exists with the given ID |
+| `CHALLENGE_SELF_CHALLENGE` | Cannot challenge yourself |
+| `CHALLENGE_ALREADY_PENDING` | An active challenge already exists between these players |
+| `FRIEND_REQUEST_DUPLICATE` | Friend request already sent or friendship already exists |
+| `REPLAY_NOT_FOUND` | No replay exists for the given match |
+| `REPORT_DUPLICATE` | This player/match has already been reported by this user |
+
+## Rate Limiting
+
+Rate limiting is enforced via `@fastify/rate-limit` to protect against abuse:
+
+| Scope | Limit | Window | Notes |
+| ----- | ----- | ------ | ----- |
+| **Global default** | 100 requests | 60 seconds | Per IP address |
+| **Leaderboard reads** | 300 requests | 60 seconds | High-frequency public queries |
+| **Match submissions** | 30 requests | 60 seconds | Prevents result flooding |
+| **Player profile updates** | 20 requests | 60 seconds | Avatar, display name changes |
+| **Friend / challenge requests** | 30 requests | 60 seconds | Social interactions |
+| **Report submissions** | 5 requests | 60 seconds | Abuse prevention |
+| **Health / readiness** | Unlimited | — | Excluded from rate limiting |
+
+Rate-limited responses include standard headers:
+
+```
+X-RateLimit-Limit: 100
+X-RateLimit-Remaining: 47
+X-RateLimit-Reset: 1719000060
+Retry-After: 12
+```
+
+When the limit is exceeded, the API returns `429 Too Many Requests` with the error body above.
+
+## Data Models
+
+Planned domain entities for the rankings system. These will be implemented as Zod schemas in `src/domain/types.ts`:
+
+### Player
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `id` | `string (uuid)` | Unique player identifier |
+| `userId` | `string (uuid)` | Auth system user ID |
+| `displayName` | `string` | Public display name |
+| `avatarUrl` | `string?` | Profile avatar URL |
+| `eloRating` | `number` | Current Elo rating |
+| `peakRating` | `number` | Highest Elo ever achieved |
+| `gamesPlayed` | `number` | Total games played |
+| `wins` | `number` | Total wins |
+| `losses` | `number` | Total losses |
+| `draws` | `number` | Total draws |
+| `currentStreak` | `number` | Current win streak (negative = loss streak) |
+| `longestStreak` | `number` | Longest win streak ever |
+| `rank` | `number?` | Current leaderboard rank |
+| `tier` | `'bronze' \| 'silver' \| 'gold' \| 'platinum' \| 'diamond' \| 'master'` | Rank tier |
+| `isBanned` | `boolean` | Whether the player is banned |
+| `createdAt` | `string (ISO 8601)` | Registration timestamp |
+| `lastActiveAt` | `string (ISO 8601)` | Last activity timestamp |
+
+### Match
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `id` | `string (uuid)` | Unique match identifier |
+| `gameId` | `string` | Which portfolio game was played |
+| `seasonId` | `string (uuid)` | Season this match belongs to |
+| `player1Id` | `string (uuid)` | First player |
+| `player2Id` | `string (uuid)` | Second player |
+| `winnerId` | `string (uuid)?` | Winner (`null` = draw) |
+| `player1RatingBefore` | `number` | Player 1's Elo before the match |
+| `player2RatingBefore` | `number` | Player 2's Elo before the match |
+| `player1RatingAfter` | `number` | Player 1's Elo after the match |
+| `player2RatingAfter` | `number` | Player 2's Elo after the match |
+| `ratingDelta` | `number` | Absolute Elo change |
+| `moves` | `number` | Total moves in the game |
+| `durationMs` | `number` | Game duration in milliseconds |
+| `replayId` | `string (uuid)?` | Associated replay (if stored) |
+| `playedAt` | `string (ISO 8601)` | When the match occurred |
+
+### Season
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `id` | `string (uuid)` | Unique season identifier |
+| `gameId` | `string` | Which game this season is for |
+| `name` | `string` | Season name (e.g., `Season 3 — Summer 2026`) |
+| `status` | `'upcoming' \| 'active' \| 'ended'` | Season state |
+| `startDate` | `string (ISO 8601)` | Season start |
+| `endDate` | `string (ISO 8601)` | Season end |
+| `startingElo` | `number` | Default Elo for new players entering this season |
+| `eloResetPolicy` | `'full' \| 'soft' \| 'none'` | How ratings carry over from the previous season |
+| `matchCount` | `number` | Total matches played this season |
+| `playerCount` | `number` | Total active players |
+
+### Tournament
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `id` | `string (uuid)` | Unique tournament identifier |
+| `gameId` | `string` | Which game the tournament is for |
+| `name` | `string` | Tournament name |
+| `format` | `'single_elimination' \| 'double_elimination' \| 'round_robin' \| 'swiss'` | Bracket format |
+| `status` | `'registration' \| 'in_progress' \| 'completed' \| 'canceled'` | Tournament state |
+| `maxParticipants` | `number` | Maximum allowed participants |
+| `currentParticipants` | `number` | Currently enrolled players |
+| `minElo` | `number?` | Minimum Elo to enter |
+| `maxElo` | `number?` | Maximum Elo to enter |
+| `prizeDescription` | `string?` | Prize details |
+| `registrationDeadline` | `string (ISO 8601)` | Enrollment cutoff |
+| `startDate` | `string (ISO 8601)` | Tournament start |
+| `endDate` | `string (ISO 8601)?` | Tournament end |
+| `bracketData` | `object` | Serialized bracket structure |
+
+### Achievement
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `id` | `string` | Achievement identifier (e.g., `first_win`, `10_game_streak`) |
+| `name` | `string` | Display name |
+| `description` | `string` | How to earn this achievement |
+| `iconUrl` | `string` | Badge icon URL |
+| `category` | `'milestone' \| 'skill' \| 'social' \| 'event'` | Achievement type |
+| `rarity` | `'common' \| 'uncommon' \| 'rare' \| 'epic' \| 'legendary'` | How rare this achievement is |
+| `xpReward` | `number` | XP granted on unlock |
+
+### Replay
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `id` | `string (uuid)` | Unique replay identifier |
+| `matchId` | `string (uuid)` | Associated match |
+| `gameId` | `string` | Which game was played |
+| `moveLog` | `object[]` | Array of timestamped moves |
+| `format` | `string` | Replay format version |
+| `sizeBytes` | `number` | Replay file size |
+| `storageUrl` | `string` | Cloud storage URL |
+| `viewCount` | `number` | Number of times viewed |
+| `createdAt` | `string (ISO 8601)` | When the replay was stored |
+
+### FriendRequest
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `id` | `string (uuid)` | Request identifier |
+| `fromPlayerId` | `string (uuid)` | Sender |
+| `toPlayerId` | `string (uuid)` | Recipient |
+| `status` | `'pending' \| 'accepted' \| 'rejected'` | Request state |
+| `sentAt` | `string (ISO 8601)` | When the request was sent |
+| `respondedAt` | `string (ISO 8601)?` | When the recipient responded |
+
+## Deployment
+
+### Docker (Recommended)
+
+```bash
+# Build the production image
+docker build -t rankings-api .
+
+# Run with environment variables
+docker run -d \
+  --name rankings-api \
+  -p 3000:3000 \
+  -e NODE_ENV=production \
+  -e DATABASE_URL=postgresql://user:pass@db:5432/rankings \
+  -e REDIS_URL=redis://redis:6379 \
+  -e JWT_SECRET=your-jwt-secret \
+  -e BILLING_API_URL=http://billing-api:3000 \
+  -e BILLING_API_KEY=internal-key \
+  -e WS_ENABLED=true \
+  rankings-api
+```
+
+### Health Checks
+
+Configure your orchestrator (Docker Compose, Kubernetes, ECS) to use the built-in probes:
+
+| Probe | Endpoint | Interval | Timeout | Failure Threshold |
+| ----- | -------- | -------- | ------- | ----------------- |
+| Liveness | `GET /health` | 30s | 5s | 3 |
+| Readiness | `GET /ready` | 10s | 5s | 3 |
+
+### Production Checklist
+
+- [ ] Set `NODE_ENV=production`
+- [ ] Provide all **required** environment variables (see [Environment Variables](#environment-variables))
+- [ ] Configure database connection pooling (recommended: 10–20 connections)
+- [ ] Configure Redis for leaderboard caching and WebSocket pub/sub
+- [ ] Enable TLS termination at the load balancer / reverse proxy
+- [ ] Set up database migrations before first deploy
+- [ ] Configure log aggregation (Pino outputs structured JSON)
+- [ ] Set up monitoring alerts on `/health` and `/ready`
+- [ ] Enable CORS for specific origins (do not use `*` in production)
+- [ ] Configure WebSocket upgrade path at the load balancer
+- [ ] Set up replay storage bucket with lifecycle policies (auto-archive old replays)
+- [ ] Configure season auto-rotation schedule
+
+## Supported Clients
+
+This API is consumed by the following applications:
+
+| Client | Type | Description |
+| ------ | ---- | ----------- |
+| **All portfolio games** | Game Clients | Leaderboard display, match result submission, player profiles, achievements |
+| **[💳 Billing API](https://github.com/scottdreinhart/billing-api)** | API (internal) | Entitlement checks for premium ranking features (custom badges, expanded history) |
+| **[📺 Ads API](https://github.com/scottdreinhart/ads-api)** | API (internal) | Player engagement data for ad-targeting audience segments |
+
+## Versioning
+
+The API uses **URL-prefix versioning**:
+
+```
+https://api.example.com/v1/leaderboards
+https://api.example.com/v1/matches
+```
+
+- All current endpoints are under `/v1/`
+- Breaking changes will be introduced under `/v2/` with a deprecation notice on `/v1/`
+- Non-breaking additions (new fields, new endpoints) are added to the current version
+- Deprecated versions will be supported for a minimum of **6 months** after the successor is released
+- The OpenAPI spec at `/docs/json` includes the version in its `info.version` field
 
 ## Remaining Work
 
