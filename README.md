@@ -172,6 +172,73 @@ http://localhost:3000/docs
 | `GET` | `/ready` | Readiness check — returns `{ ready: true }` when all dependencies are available |
 | `GET` | `/docs` | Swagger UI — interactive API documentation |
 
+### Proposed Endpoints
+
+#### Players
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/players` | Register a new player profile |
+| `GET` | `/players` | List players (paginated, searchable by display name) |
+| `GET` | `/players/:id` | Get player profile, lifetime stats, and current rating |
+| `PATCH` | `/players/:id` | Update player display name or avatar |
+| `GET` | `/players/:id/stats` | Get detailed stats breakdown (wins, losses, draws, streaks per game) |
+| `GET` | `/players/:id/history` | Get match history (paginated, filterable by game/season) |
+
+#### Matches
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/matches` | Submit a match result (game, players, outcome, duration, moves) |
+| `GET` | `/matches` | List recent matches (paginated, filterable by game/player/season) |
+| `GET` | `/matches/:id` | Get match details (players, result, rating changes, replay data) |
+| `POST` | `/matches/:id/verify` | Verify/dispute a match result (anti-cheat) |
+
+#### Rankings & Leaderboards
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/leaderboards` | List available leaderboards (one per game per season) |
+| `GET` | `/leaderboards/:gameId` | Get current leaderboard for a game (paginated, top-N) |
+| `GET` | `/leaderboards/:gameId/around/:playerId` | Get leaderboard centered around a player’s rank |
+| `GET` | `/leaderboards/:gameId/top` | Get top 10/25/50/100 players for a game |
+| `GET` | `/rankings/:playerId` | Get a player’s rank and rating across all games |
+
+#### Seasons
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/seasons` | Create a new competitive season (start date, end date, rules) |
+| `GET` | `/seasons` | List all seasons (past, current, upcoming) |
+| `GET` | `/seasons/:id` | Get season details, rules, and final standings |
+| `GET` | `/seasons/current` | Get the active season |
+| `POST` | `/seasons/:id/finalize` | End a season and snapshot final leaderboard standings (admin) |
+
+#### Elo Ratings
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/ratings/:playerId` | Get player’s current Elo rating per game |
+| `GET` | `/ratings/:playerId/history` | Get Elo rating history over time (for chart visualization) |
+| `GET` | `/ratings/distribution` | Get rating distribution stats (bell curve data per game) |
+
+#### Achievements & Streaks
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/achievements` | List all available achievements/badges |
+| `GET` | `/achievements/:playerId` | Get achievements earned by a player |
+| `POST` | `/achievements` | Define a new achievement (admin) |
+| `GET` | `/streaks/:playerId` | Get player’s current and best win/loss streaks per game |
+
+#### King of the Hill
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/king-of-the-hill/:gameId` | Get the current “King” (top-ranked player) and their reign duration |
+| `GET` | `/king-of-the-hill/:gameId/history` | Get history of Kings (who held the top spot and for how long) |
+| `POST` | `/king-of-the-hill/:gameId/challenge` | Submit a challenge attempt against the current King |
+
 ## Architecture
 
 This project enforces seven complementary design principles:
@@ -238,10 +305,16 @@ This project enforces seven complementary design principles:
 
 ## Future Improvements
 
-- [ ] **WebSocket support** — real-time event streaming for live updates
-- [ ] **Message queue integration** — async job processing with BullMQ or similar
-- [ ] **Caching layer** — Redis-backed response caching for high-traffic endpoints
-- [ ] **Multi-tenant support** — serve all portfolio games from a single API instance
+- [ ] **WebSocket live leaderboard** — stream real-time ranking changes to connected game clients as matches complete
+- [ ] **Elo variant support** — configurable rating algorithms per game (Glicko-2, TrueSkill, custom K-factor curves)
+- [ ] **Anti-cheat validation** — server-side move validation and replay verification to detect impossible game states
+- [ ] **Global cross-game ranking** — composite score aggregating a player’s performance across all portfolio games
+- [ ] **Seasonal rewards** — integrate with Billing API to auto-grant entitlements (themes, badges) based on season-end placement
+- [ ] **Matchmaking service** — skill-based matchmaking queue that pairs players of similar Elo for competitive games
+- [ ] **Historical snapshots** — nightly leaderboard snapshots for trend analysis and “this day last year” comparisons
+- [ ] **Social graph** — friend lists, follow/unfollow, and friend-scoped leaderboards
+- [ ] **Replay storage** — store move-by-move game replays referenced from match records for spectating and review
+- [ ] **Push notifications** — notify players when they’re dethroned from King of the Hill or drop in rank
 
 ## Portfolio Services
 
