@@ -239,6 +239,73 @@ http://localhost:3000/docs
 | `GET` | `/king-of-the-hill/:gameId/history` | Get history of Kings (who held the top spot and for how long) |
 | `POST` | `/king-of-the-hill/:gameId/challenge` | Submit a challenge attempt against the current King |
 
+#### Tournaments
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/tournaments` | Create a tournament (name, game, format, max participants, start date) |
+| `GET` | `/tournaments` | List tournaments (paginated, filterable by game/status/season) |
+| `GET` | `/tournaments/:id` | Get tournament details, bracket, and current round |
+| `PATCH` | `/tournaments/:id` | Update tournament settings (admin) |
+| `POST` | `/tournaments/:id/register` | Register a player for a tournament |
+| `DELETE` | `/tournaments/:id/register/:playerId` | Withdraw a player from a tournament |
+| `GET` | `/tournaments/:id/bracket` | Get full bracket with match results |
+| `POST` | `/tournaments/:id/advance` | Advance the tournament to the next round (admin) |
+| `POST` | `/tournaments/:id/finalize` | Finalize tournament and distribute rewards (admin) |
+
+#### Friends & Social
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/friends/request` | Send a friend request to another player |
+| `GET` | `/friends` | List current friends |
+| `GET` | `/friends/requests` | List pending friend requests (incoming + outgoing) |
+| `POST` | `/friends/requests/:id/accept` | Accept a friend request |
+| `POST` | `/friends/requests/:id/reject` | Reject a friend request |
+| `DELETE` | `/friends/:playerId` | Remove a friend |
+| `GET` | `/friends/leaderboard/:gameId` | Get friend-scoped leaderboard for a game |
+
+#### Challenges (Direct)
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/challenges` | Challenge a specific player to a match |
+| `GET` | `/challenges` | List pending challenges (incoming + outgoing) |
+| `GET` | `/challenges/:id` | Get challenge details |
+| `POST` | `/challenges/:id/accept` | Accept a challenge |
+| `POST` | `/challenges/:id/decline` | Decline a challenge |
+| `DELETE` | `/challenges/:id` | Cancel an outgoing challenge |
+
+#### Replays
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/replays` | Store a move-by-move game replay |
+| `GET` | `/replays/:matchId` | Get replay data for a match |
+| `GET` | `/replays/featured` | Get featured/highlighted replays (best games of the week) |
+| `DELETE` | `/replays/:matchId` | Remove replay data (admin) |
+
+#### Reports & Moderation
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/reports` | Report a player for cheating or unsportsmanlike behavior |
+| `GET` | `/reports` | List reports (paginated, filterable by status — admin) |
+| `GET` | `/reports/:id` | Get report details and evidence |
+| `POST` | `/reports/:id/resolve` | Resolve a report with action taken (warn, suspend, ban — admin) |
+| `GET` | `/bans` | List banned/suspended players (admin) |
+| `POST` | `/bans` | Ban or suspend a player (admin) |
+| `DELETE` | `/bans/:playerId` | Lift a ban or suspension (admin) |
+
+#### Notifications
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/notifications/:playerId` | List recent notifications for a player |
+| `POST` | `/notifications/mark-read` | Mark notifications as read |
+| `GET` | `/notifications/:playerId/preferences` | Get notification preferences (challenge alerts, rank changes, etc.) |
+| `PATCH` | `/notifications/:playerId/preferences` | Update notification preferences |
+
 ## Architecture
 
 This project enforces seven complementary design principles:
